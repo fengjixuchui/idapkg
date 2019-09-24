@@ -1,7 +1,7 @@
 import os
 
 import ida_loader
-import idaapi
+import ida_diskio
 
 from pkg.logger import getLogger
 from pkg.package import LocalPackage, InstallablePackage
@@ -41,7 +41,7 @@ def init_idapkg(basedir):
             sys.path.append(idapkg_path)
             from pkg.main import init_environment
             init_environment()
-        except:
+        except Exception:
             import traceback
             traceback.print_exc()
             return usage()
@@ -56,7 +56,7 @@ SEP = '\n# idapkg version: ', '# idapkg end\n'
 
 
 def update_pythonrc():
-    rcpath = os.path.join(idaapi.get_user_idadir(), "idapythonrc.py")
+    rcpath = os.path.join(ida_diskio.get_user_idadir(), "idapythonrc.py")
     sep_with_ver = SEP[0] + __version__
     payload = '%s\n%s\n%s' % (sep_with_ver, RC.strip(), SEP[1])
     if os.path.isfile(rcpath):
@@ -102,12 +102,14 @@ def init_environment(load=True):
                 ._find_loadable_modules('plugins', ida_loader.load_plugin)
 
     else:
-        log.info("Downloading initial dependencies...")
-        log.info("IDA must be restarted after printing \"Done!\"")
+        # log.info("Downloading initial dependencies...")
+        # log.info("IDA must be restarted after printing \"Done!\"")
 
-        for _dep in _initial_deps:
-            InstallablePackage \
-                .install_from_repo(Repository('https://api.idapkg.com'), _dep)
+        # for _dep in _initial_deps:
+        #     InstallablePackage \
+        #         .install_from_repo(Repository('https://api.idapkg.com'), _dep)
+
+        pass # do not automatically download packages from idapkg.com yet
 
     for pkg in LocalPackage.all():
         pkg.populate_env()
@@ -119,3 +121,4 @@ def init_environment(load=True):
 
     from pkg.internal_api import invalidate_idausr
     invalidate_idausr()
+

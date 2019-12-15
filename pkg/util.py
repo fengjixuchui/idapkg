@@ -1,11 +1,11 @@
-import threading
 import ctypes
-import sys
 import os
+import sys
+import threading
 
-import ida_kernwin
-import PyQt5.QtCore
 import PyQt5.QtWidgets
+import PyQt5.QtCore
+import ida_kernwin
 
 
 # Helper for registering actions
@@ -71,4 +71,3 @@ class Worker(PyQt5.QtCore.QEvent):
 
     def __del__(self):
         self.func()
-

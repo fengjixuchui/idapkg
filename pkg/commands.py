@@ -3,17 +3,18 @@ Some console-friendly methods are exposed in pkg.*, and defined at pkg.commands.
 """
 import re
 
+from .compat import basestring
 from .config import g
 from .package import InstallablePackage, LocalPackage
 from .repo import Repository
 from .util import __work
 from .vendor import semantic_version
 
-__all__ = []
+__all__ = ['install', 'remove', 'local', 'remote', 'refresh', 'upgrade']
 
 
 def _parse_spec(spec):
-    match = re.match("^([a-zA-Z0-9\\-][a-zA-Z0-9_\\-]{3,214})(.*)$", spec)
+    match = re.match(r"^([a-zA-Z0-9\-][a-zA-Z0-9_\-]{3,214})(.*)$", spec)
     name = match.group(1)
     version = match.group(2).strip()
 
@@ -24,12 +25,6 @@ def _parse_spec(spec):
     return name, version
 
 
-def _export(func):
-    __all__.append(func.__name__)
-    return func
-
-
-@_export
 def install(spec, repo=None, upgrade=False):
     """
     Download and install a package from specified repository.
@@ -60,7 +55,6 @@ def install(spec, repo=None, upgrade=False):
     return __work(lambda: _install_from_repositories(repo))
 
 
-@_export
 def remove(name):
     """
     Remove a package locally (LocalPackage.remove).
@@ -70,7 +64,6 @@ def remove(name):
         return __work(pkg.remove)
 
 
-@_export
 def local(name):
     """
     Find an installed package (LocalPackage.by_name).
@@ -81,7 +74,6 @@ def local(name):
     return LocalPackage.by_name(name)
 
 
-@_export
 def remote(name, repo=None):
     """
     Find a remote package from given repos.
@@ -104,7 +96,6 @@ def remote(name, repo=None):
     return None
 
 
-@_export
 def refresh():
     """
     Rescan and load available plugins.
@@ -115,7 +106,6 @@ def refresh():
     return True
 
 
-@_export
 def upgrade(spec, repo=None):
     """
     Upgrade specified package. (:code:`pkg.install(spec, repo, upgrade=True)`)

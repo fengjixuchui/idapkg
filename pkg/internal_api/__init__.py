@@ -2,6 +2,7 @@
 import collections
 import ctypes
 import os
+import sys
 import traceback
 
 import idaapi
@@ -10,24 +11,47 @@ from ..config import g, _save_config
 from ..env import ea as current_ea, os as current_os, version_info
 from ..logger import getLogger
 
-IDADIR = idaapi.idadir('')
 log = getLogger(__name__)
 
 
-def _os_error():
-    return Exception("unknown os: %r" % current_os)
+def _unique_items(items):
+    seen = set()
+    res = [(item, seen.add(item))[0] for item in items if item not in seen]
+    return res
+
+
+def idausr_add(new):
+    orig = idaapi.get_ida_subdirs('')
+    new = _unique_items(orig + [new])
+    _apply_idausr(new)
+
+
+def idausr_remove(target):
+    orig = idaapi.get_ida_subdirs('')
+    assert target in orig, repr((orig, target))
+    orig.remove(target)
+    _apply_idausr(orig)
+
+
+def _putenv(key, value):
+    os.putenv(key, value)
+    os.environ[key] = value
+
+    if sys.platform == 'win32':
+        ctypes.windll.ucrtbase._putenv(b'%s=%s' % (key.encode(), value.encode()))
 
 
 def _ida_lib_path(ea):
+    idadir = idaapi.idadir('')
     ea_name = 'ida64' if ea == 64 else 'ida'
     if current_os == 'win':
-        path = os.path.join(IDADIR, ea_name + ".dll")
+        path = os.path.join(idadir, ea_name + ".dll")
     elif current_os == 'mac':
-        path = os.path.join(IDADIR, "lib" + ea_name + ".dylib")
+        path = os.path.join(idadir, "lib" + ea_name + ".dylib")
     elif current_os == 'linux':
-        path = os.path.join(IDADIR, "lib" + ea_name + ".so")
+        path = os.path.join(idadir, "lib" + ea_name + ".so")
     else:
-        raise _os_error()
+        raise RuntimeError("unknown os: %r" % current_os)
     return os.path.normpath(path)
 
 
@@ -43,7 +67,7 @@ def _ida_lib():
         functype = ctypes.CFUNCTYPE
         lib = getattr(ctypes.cdll, 'lib' + ea_name)
     else:
-        raise _os_error()
+        raise RuntimeError("unknown os: %r" % current_os)
     return functype, lib
 
 
@@ -129,11 +153,13 @@ def invalidate_proccache():
 __possible_to_invalidate = None
 
 
-def invalidate_idausr():
+def _apply_idausr(new_value):
     global __possible_to_invalidate
 
     if __possible_to_invalidate is False:
         return False
+
+    original = os.getenv('IDAUSR', '')
 
     cfg = g['idausr_native_bases'][current_os][version_info.str()]
     already_found = cfg[current_ea == 64]
@@ -183,10 +209,21 @@ def invalidate_idausr():
             cfg[current_ea == 64] = offset
             _save_config(g)
 
-    # qvector<qstring> *ptr(getenv("IDAUSR").split(";" or ":"))
-    # ptr.len = ptr.cap = 0
+    # Re-initialize the vector of IDAUSR paths
+    # Memory leak here, but not too much
     ptr = ctypes.cast(base + offset, ctypes.POINTER(ctypes.c_size_t))
-    # Memory leak here, but not too much.
-    # TODO: we can use qvector.clear() here?
-    ptr[1] = ptr[2] = 0
+    ptr[0] = ptr[1] = ptr[2] = 0
+
+    # Apply IDAUSR
+    idadir = idaapi.idadir('')
+    new_value = [item for item in new_value if item != idadir]
+
+    # Refresh cache
+    sep = ';' if current_os == 'win' else ':'
+    _putenv('IDAUSR', sep.join(new_value))
+    idaapi.get_ida_subdirs('')
+
+    # Restore IDAUSR, so the child process is not affected
+    _putenv('IDAUSR', original)
+
     return True

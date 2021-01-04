@@ -7,7 +7,7 @@ import shutil
 import tempfile
 
 from .compat import (
-    HTTPSConnection, HTTPConnection, urlparse,
+    HTTPSConnection, HTTPConnection, urlparse, urljoin,
     CannotSendRequest, ResponseNotReady, RemoteDisconnected)
 
 # Supported protocols
@@ -25,7 +25,7 @@ CACHED_CONNECTIONS = {}
 
 def _fetch(orig_url, timeout, retry=RETRY_COUNT):
     url = urlparse(orig_url)
-    cls = SCHEME_MAP.get(url.scheme)
+    cls = SCHEME_MAP[url.scheme]
 
     if not retry:
         raise Exception("Max retries exceeded.")
@@ -60,7 +60,11 @@ def _fetch(orig_url, timeout, retry=RETRY_COUNT):
         del CACHED_CONNECTIONS[key]
 
     if res.status // 100 == 3 and loc:
-        return _fetch(loc, timeout)
+        new_url = urljoin(orig_url, loc)
+        return _fetch(new_url, timeout)
+
+    if res.status // 100 != 2:
+        raise Exception("HTTP status code: %d %s (from %s)" % (res.status, res.reason, orig_url))
 
     return res
 
@@ -79,4 +83,4 @@ def download(url, timeout=None, to_file=False):
 
 
 if __name__ == '__main__':
-    print(repr(download('http://idapkg.com', to_file=True).read()))
+    print(repr(download('https://idapkg.com', to_file=True).read()))

@@ -2,12 +2,11 @@
 Some console-friendly methods are exposed in pkg.*, and defined at pkg.commands.
 """
 import re
+import threading
 
-from .compat import basestring
 from .config import g
-from .package import InstallablePackage, LocalPackage
+from .package import LocalPackage
 from .repo import Repository
-from .util import __work
 from .vendor import semantic_version
 
 __all__ = ['install', 'remove', 'local', 'remote', 'refresh', 'upgrade']
@@ -28,12 +27,12 @@ def _parse_spec(spec):
 def install(spec, repo=None, upgrade=False):
     """
     Download and install a package from specified repository.
-    See :meth:`InstallablePackage.install_from_repo`.
+    See :meth:`install_from_repo`.
 
     :param spec: `name==version`, or just `name` only.
     :type spec: str
     :param repo: URL of the repository. Default: :code:`g['repos']`
-    :type repo: str or list(str) or None
+    :type repo: list(str) or None
     :param upgrade: Upgrade when already installed if True.
     """
 
@@ -44,15 +43,14 @@ def install(spec, repo=None, upgrade=False):
         if pkg is None:
             raise Exception('Package not found in all repositories: %r' % name)
 
-        InstallablePackage.install_from_repo(pkg.repo, name, version, upgrade)
+        pkg.install(upgrade)
 
     if repo is None:
         repo = g['repos']
 
-    elif isinstance(repo, basestring):
-        repo = [str(repo)]
-
-    return __work(lambda: _install_from_repositories(repo))
+    t = threading.Thread(target=_install_from_repositories, args=(repo,))
+    t.start()
+    return t
 
 
 def remove(name):
@@ -61,7 +59,7 @@ def remove(name):
     """
     pkg = LocalPackage.by_name(name)
     if pkg:
-        return __work(pkg.remove)
+        return pkg.remove()
 
 
 def local(name):
@@ -80,7 +78,7 @@ def remote(name, repo=None):
 
     :param name: Name of the package
     :param repo: URL of the repository. Default: :code:`g['repos']`
-    :type repo: str or list(str) or None
+    :type repo: list(str) or None
     :returns: None if package is not found, else InstallablePackage instance.
     :rtype: InstallablePackage
     """
@@ -88,7 +86,7 @@ def remote(name, repo=None):
         repo = g['repos']
 
     for _repo in repo:
-        pkg = Repository(_repo).single(name)
+        pkg = Repository.from_url(_repo).get(name)
         if pkg is None:
             continue
         else:
@@ -111,6 +109,7 @@ def upgrade(spec, repo=None):
     Upgrade specified package. (:code:`pkg.install(spec, repo, upgrade=True)`)
 
     :param spec: `name==version`, or just `name` only.
+    :param repo: target repository to download.
     :type spec: str
     """
     return install(spec, repo, upgrade=True)
